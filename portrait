@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/portrait_gtk.py" ]]; then
+  APP_DIR="$SCRIPT_DIR"
+else
+  APP_DIR="${PORTRAIT_APP_DIR:-$HOME/.local/opt/portrait}"
+fi
+
+resolve_repo() {
+  if [[ -n "${MYSTICGSI_DIR:-}" ]]; then
+    python3 -c 'import os,sys; print(os.path.realpath(os.path.expanduser(sys.argv[1])))' "$MYSTICGSI_DIR"
+    return
+  fi
+  local config="$HOME/.config/portrait/settings.json"
+  if [[ -f "$config" ]]; then
+    local configured
+    configured="$(python3 -c 'import json,os,sys; d=json.load(open(sys.argv[1])); print(os.path.realpath(os.path.expanduser(d.get("repo", ""))))' "$config" 2>/dev/null || true)"
+    if [[ -n "$configured" && -f "$configured/cli.py" ]]; then
+      printf '%s\n' "$configured"
+      return
+    fi
+  fi
+  printf '%s\n' "$HOME/mysticgsi"
+}
+
+print_version() {
+  cat <<'PORTRAIT_ART'
+⠀⠀⠀⠀⢀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠙⢷⣤⣤⣴⣶⣶⣦⣤⣤⡾⠋⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⣼⣿⣿⣉⣹⣿⣿⣿⣿⣏⣉⣿⣿⣧⠀⠀⠀⠀
+⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀
+⣠⣄⠀⢠⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⡄⠀⣠⣄
+⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿
+⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿
+⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿
+⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿
+⠻⠟⠁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠈⠻⠟
+⠀⠀⠀⠀⠉⠉⣿⣿⣿⡏⠉⠉⢹⣿⣿⣿⠉⠉⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⠀⠀⠀⠉⠉⠁⠀⠀⠀⠀⠀⠀
+
+$$$$$$$\                       $$\                        $$\   $$\       $$\
+$$  _*$$\                      $$ |                       \_*|  $$ |    $$$$ |
+$$ |  $$ | $$$$$$\   $$$$$$\ $$$$$$\    $$$$$$\  $$$$$$\  $$\ $$$$$$\   \_$$ |
+$$$$$$$  |$$  __$$\ $$  _*$$\\*$$  *|  $$  __$$\ \___*$$\ $$ |\_$$  _|    $$ |
+$$  ___*/ $$ /  $$ |$$ |  \_*| $$ |    $$ |  \__|$$$$$$$ |$$ |  $$ |      $$ |
+$$ |      $$ |  $$ |$$ |       $$ |$$\ $$ |     $$  __$$ |$$ |  $$ |$$\   $$ |
+$$ |      \$$$$$$  |$$ |       \$$$$  |$$ |     \$$$$$$$ |$$ |  \$$$$  |$$$$$$\
+\_*|       \______/ \_*|        \____/ \__|      \___*___|\__|   \___*/ \______|
+PORTRAIT_ART
+  printf '\nPortrait CLI 1.2.0 — MysticGSI helper\n'
+}
+
+if [[ "${1:-}" == "version" || "${1:-}" == "--version" || "${1:-}" == "-V" ]]; then
+  print_version
+  exit 0
+fi
+
+if [[ "${1:-}" == "--gui" ]]; then
+  REPO="$(resolve_repo)"
+  export MYSTICGSI_DIR="$REPO"
+  if [[ -x "$APP_DIR/run_portrait.sh" ]]; then
+    exec "$APP_DIR/run_portrait.sh"
+  fi
+  exec python3 "$APP_DIR/portrait_gtk.py"
+fi
+
+if [[ "${1:-}" == "uninstall" ]]; then
+  PURGE=false
+  if [[ "${2:-}" == "--purge" ]]; then PURGE=true; fi
+  printf 'Portraitアプリ本体と起動コマンドを削除します。MysticGSIとROM/ビルド成果物は削除しません。\n'
+  if [[ "$PURGE" == true ]]; then
+    printf '設定ファイルも削除します。\n'
+  fi
+  read -r -p '続行するには yes と入力してください: ' answer
+  if [[ "$answer" != "yes" ]]; then
+    echo 'キャンセルしました。'
+    exit 1
+  fi
+  rm -f "$HOME/.local/bin/portrait" "$HOME/.local/share/applications/portrait.desktop"
+  rm -rf "$HOME/.local/opt/portrait"
+  for profile in "$HOME/.profile" "$HOME/.bashrc"; do
+    if [[ -f "$profile" ]]; then
+      temp="$(mktemp)"
+      awk 'skip { skip=0; next } /# Portrait local-bin PATH/ { skip=1; next } { print }' "$profile" > "$temp"
+      cat "$temp" > "$profile"
+      rm -f "$temp"
+    fi
+  done
+  if [[ "$PURGE" == true ]]; then rm -rf "$HOME/.config/portrait"; fi
+  echo 'Portraitをアンインストールしました。'
+  echo 'GTK 3/PyGObjectとMysticGSI本体・成果物は残しています。'
+  exit 0
+fi
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" || $# -eq 0 ]]; then
+  cat <<'HELP'
+Portrait — MysticGSI command helper
+
+Usage:
+  portrait build <name> <firmware|URL> [MysticGSI options...]
+  portrait rebuild <name> [MysticGSI options...]
+  portrait list
+  portrait clean
+  portrait --gui
+  portrait version
+  portrait uninstall [--purge]
+
+Local firmware paths are resolved relative to your current directory. MysticGSI
+runs from its repository root so tmp/ and out/ remain there.
+
+Set MYSTICGSI_DIR=/path/to/mysticgsi to select a non-default checkout.
+Options after build/rebuild are passed to MysticGSI's official cli.py.
+HELP
+  exit 0
+fi
+
+REPO="$(resolve_repo)"
+if [[ ! -f "$REPO/cli.py" ]]; then
+  printf 'Portrait: MysticGSI cli.py not found: %s\n' "$REPO" >&2
+  printf 'Set MYSTICGSI_DIR or install MysticGSI at ~/mysticgsi.\n' >&2
+  exit 2
+fi
+PYTHON="$REPO/.venv/bin/python"
+if [[ ! -x "$PYTHON" ]]; then
+  printf 'Portrait: MysticGSI virtualenv not found: %s\n' "$PYTHON" >&2
+  printf 'Run setup first: cd %q && ./setup_host.py\n' "$REPO" >&2
+  exit 2
+fi
+
+ARGS=("$@")
+if [[ "${ARGS[0]}" == "build" && ${#ARGS[@]} -ge 3 ]]; then
+  SOURCE="${ARGS[2]}"
+  case "$SOURCE" in
+    http://*|https://*) ;;
+    *)
+      SOURCE="$(python3 -c 'import os,sys; print(os.path.realpath(os.path.expanduser(sys.argv[1])))' "$SOURCE")"
+      ARGS[2]="$SOURCE"
+      ;;
+  esac
+fi
+
+cd "$REPO"
+exec "$PYTHON" "$REPO/cli.py" "${ARGS[@]}"
